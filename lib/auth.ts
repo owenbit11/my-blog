@@ -19,10 +19,33 @@ function sessionValue(): string {
   return crypto.createHmac('sha256', secret).update(hash).digest('hex')
 }
 
-export async function verifyAdminPassword(plainPassword: string): Promise<boolean> {
-  const hash = requiredEnv('ADMIN_PASSWORD_HASH')
-  return bcrypt.compare(plainPassword, hash)
+// ... 其他 import 保持不变
+
+/**
+ * 校验管理员密码
+ */
+export async function verifyAdminPassword(password: string): Promise<boolean> {
+  // 1. 优先校验明文密码 (方案 A)
+  const rawPassword = process.env.RAW_ADMIN_PASSWORD;
+  if (rawPassword && password === rawPassword) {
+    return true;
+  }
+
+  // 2. 备选方案：校验哈希密码 (如果你之前存过 ADMIN_PASSWORD_HASH)
+  const hash = process.env.ADMIN_PASSWORD_HASH;
+  if (hash) {
+    try {
+      const bcrypt = await import('bcryptjs');
+      return bcrypt.compareSync(password, hash);
+    } catch (e) {
+      console.error('Bcrypt 校验失败:', e);
+    }
+  }
+
+  return false;
 }
+
+// ... 文件的其他部分 (setAdminSession, isAdminLoggedIn 等) 保持不变
 
 export async function isAdminLoggedIn(): Promise<boolean> {
   const cookieStore = await cookies()
