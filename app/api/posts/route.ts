@@ -1,50 +1,40 @@
-export const dynamic = 'force-dynamic'
-
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getPublishedPostsPaged } from '@/lib/posts'
-import { getRedis } from '@/lib/redis'
+import { getRedisOrNull } from '@/lib/redis' // 确保这里导入了新函数
 import { logError } from '@/lib/logger'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const page = parseInt(searchParams.get('page') ?? '1')
+    const pageSize = parseInt(searchParams.get('pageSize') ?? '10')
+    const category = searchParams.get('category') ?? undefined
+    const tag = searchParams.get('tag') ?? undefined
 
-    const page = Number(searchParams.get('page') ?? '1')
-    const pageSize = Number(searchParams.get('pageSize') ?? '10')
-    const category = searchParams.get('category')?.trim() || ''
-    const tag = searchParams.get('tag')?.trim() || ''
-
-    const key = `cache:posts:page=${page}:size=${pageSize}:c=${category}:t=${tag}`
+    const cacheKey = `posts:paged:${page}:${pageSize}:${category ?? 'all'}:${tag ?? 'all'}`
     const ttl = Number(process.env.CACHE_TTL_SECONDS ?? '60')
 
     const redis = getRedisOrNull()
-
-if (redis) {
-  const cached = await redis.get(key)
-  if (cached) return NextResponse.json(cached)
-}
-
-// ...正常查库
-
-if (redis) {
-  await redis.set(key, data, { ex: ttl })
-}
-
-    if (cached) {
-      return NextResponse.json(cached)
+    
+    // 如果有 Redis，先查缓存
+    if (redis) {
+      const cached = await redis.get(cacheKey)
+      if (cached) {
+        return NextResponse.json(cached)
+      }
     }
 
-    const data = await getPublishedPostsPaged({
-      page: Number.isFinite(page) ? page : 1,
-      pageSize: Number.isFinite(pageSize) ? pageSize : 10,
-      category: category || undefined,
-      tag: tag || undefined,
-    })
+    // 查数据库
+    const result = await getPublishedPostsPaged({ page, pageSize, category, tag })
 
-    await redis.set(key, data, { ex: ttl })
-    return NextResponse.json(data)
+    // 如果有 Redis，写缓存
+    if (redis) {
+      await redis.set(cacheKey, JSON.stringify(result), { ex: ttl })
+    }
+
+    return NextResponse.json(result)
   } catch (error) {
-    logError('GET /api/posts failed', error)
-    return NextResponse.json({ error: 'Failed to load posts' }, { status: 500 })
+    logError('获取文章列表失败', error)
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 })
   }
 }
