@@ -1,3 +1,5 @@
+export const revalidate = 86400; // 每 24 小时刷新一次文章缓存
+
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'

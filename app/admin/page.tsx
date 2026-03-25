@@ -83,6 +83,7 @@ async function createPostAction(formData: FormData) {
   }
 
   const title = String(formData.get('title') ?? '').trim()
+  
   const excerpt = String(formData.get('excerpt') ?? '').trim()
   const contentMarkdown = String(formData.get('contentMarkdown') ?? '').trim()
   const status = String(formData.get('status') ?? 'draft') === 'published' ? 'published' : 'draft'
