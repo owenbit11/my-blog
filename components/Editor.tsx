@@ -6,7 +6,12 @@ import rehypeHighlight from 'rehype-highlight'
 import Image from 'next/image'
 import 'highlight.js/styles/github-dark.css'
 
-export default function Editor({ name, defaultValue = '' }: { name: string, defaultValue?: string }) {
+interface EditorProps {
+  name: string;
+  defaultValue?: string;
+}
+
+export default function Editor({ name, defaultValue = '' }: EditorProps) {
   const [content, setContent] = useState(defaultValue)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -20,30 +25,40 @@ export default function Editor({ name, defaultValue = '' }: { name: string, defa
     formData.append('file', file)
 
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const data = await res.json()
+      // 这里的 API 对应 app/api/upload/route.ts
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+      
       if (data.url) {
-        // 将图片 Markdown 语法插入到当前内容末尾
-        const imageMarkdown = `\n![${file.name}](${data.url})\n`
-        setContent(prev => prev + imageMarkdown)
+        // 生成 Markdown 格式并追加到当前文本末尾
+        const imgMarkdown = `\n![${file.name}](${data.url})\n`
+        setContent(prev => prev + imgMarkdown)
+      } else {
+        throw new Error(data.error || '上传失败')
       }
     } catch (err) {
-      alert('上传失败')
+      alert('图片上传失败，请检查 Cloudinary 配置及网络。')
     } finally {
       setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = '' 
     }
   }
 
   return (
-    <div className="space-y-2 mt-2">
-      <div className="flex items-center gap-2">
+    <div className="space-y-4">
+      {/* 工具条：上传按钮 */}
+      <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded border shadow-sm"
+          className="flex items-center gap-2 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md border border-gray-300 transition-all shadow-sm active:scale-95 disabled:opacity-50"
         >
-          {uploading ? '上传中...' : '插入图片'}
+          {uploading ? '⌛ 上传中...' : '🖼️ 插入图片'}
         </button>
         <input 
           type="file" 
@@ -52,36 +67,35 @@ export default function Editor({ name, defaultValue = '' }: { name: string, defa
           className="hidden" 
           accept="image/*" 
         />
-        <span className="text-[10px] text-gray-400">支持 JPG/PNG/WebP</span>
+        <span className="text-[11px] text-gray-400">存储至 Cloudinary (CDN)</span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* 隐藏的 input 用于 Form 提交数据 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[500px]">
+        {/* 左侧：编辑区 */}
         <textarea
           name={name}
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          rows={12}
-          className="w-full rounded border px-3 py-2 font-mono text-sm focus:ring-1 focus:ring-blue-500 outline-none"
-          placeholder="# 开始写作..."
+          className="w-full h-full p-4 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-400 outline-none resize-none bg-gray-50 shadow-sm"
+          placeholder="支持 Markdown 语法，点击上方按钮插入图片..."
           required
         />
         
-        {/* 预览区 */}
-        <div className="p-3 border rounded bg-white overflow-y-auto max-h-[400px] prose prose-sm max-w-none shadow-inner">
+        {/* 右侧：预览区 */}
+        <div className="h-full p-4 border border-gray-200 rounded-lg bg-white overflow-y-auto prose prose-sm max-w-none shadow-inner">
           <ReactMarkdown 
             rehypePlugins={[rehypeHighlight]}
             components={{
               img: ({ src, alt }) => {
                 if (!src || typeof src !== 'string') return null
                 return (
-                  <span className="block my-4 relative w-full h-[250px]">
+                  <span className="block my-6 relative w-full h-[300px]">
                     <Image 
                       src={src} 
-                      alt={alt || ''} 
+                      alt={alt || 'Blog Image'} 
                       fill 
                       className="object-contain rounded-lg" 
-                      sizes="(max-width: 768px) 100vw, 400px"
+                      sizes="(max-width: 768px) 100vw, 500px"
                     />
                   </span>
                 )
