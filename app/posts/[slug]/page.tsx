@@ -1,5 +1,7 @@
 export const revalidate = 86400; // 每 24 小时刷新一次文章缓存
 
+import rehypeHighlight from 'rehype-highlight'
+import 'highlight.js/styles/github-dark.css'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -50,9 +52,9 @@ export default async function PostPage({ params }: PostPageProps) {
       </header>
 
       <div className="prose prose-lg max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {post.contentMarkdown}
-        </ReactMarkdown>
+      <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+  {post.contentMarkdown}
+</ReactMarkdown>
       </div>
 
       {post.tags.length > 0 && (
