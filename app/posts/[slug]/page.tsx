@@ -41,8 +41,8 @@ export default async function PostPage({ params }: PostPageProps) {
   }
 
   return (
-    <article className="max-w-4xl mx-auto px-4 py-12">
-      <header className="mb-8">
+    <article className="max-w-4xl mx-auto px-4 py-12 items-start flex flex-col">
+      <header className="mb-8 text-center">
         <h1 className="text-4xl font-bold mb-4">{post.title}</h1>
         <div className="flex gap-4 text-gray-500 text-sm">
           {post.publishedAt && (
@@ -52,8 +52,7 @@ export default async function PostPage({ params }: PostPageProps) {
         </div>
       </header>
 
-      <div className="prose prose-lg max-w-none">
-      
+      <div className="prose prose-lg max-w-none w-full">
       <ReactMarkdown
   rehypePlugins={[rehypeHighlight]}
   components={{
