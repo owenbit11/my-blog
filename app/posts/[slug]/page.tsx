@@ -1,5 +1,6 @@
 export const revalidate = 86400; // 每 24 小时刷新一次文章缓存
 
+import Image from 'next/image'
 import rehypeHighlight from 'rehype-highlight'
 import 'highlight.js/styles/github-dark.css'
 import { notFound } from 'next/navigation'
@@ -52,7 +53,31 @@ export default async function PostPage({ params }: PostPageProps) {
       </header>
 
       <div className="prose prose-lg max-w-none">
-      <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+      // 在 ReactMarkdown 组件中添加 components 属性
+      <ReactMarkdown
+  rehypePlugins={[rehypeHighlight]}
+  components={{
+    // 解构 props 时，对 src 和 alt 进行处理
+    img: ({ src, alt, ...props }) => {
+      // 1. 确保 src 存在且必须是字符串类型（排除 Blob）
+      if (!src || typeof src !== 'string') return null;
+
+      return (
+        <span className="block my-8 relative w-full h-[400px]">
+          <Image
+            // 2. 这里 src 已经被 typeof 锁定为 string，不再报 TS2322 错误
+            src={src}
+            alt={alt || '博客图片'}
+            fill
+            className="object-contain rounded-xl"
+            sizes="(max-width: 768px) 100vw, 800px"
+            // 如果你使用了外部图片（如 CDN），请确保在 next.config.js 中配置了 remotePatterns
+          />
+        </span>
+      );
+    },
+  }}
+>
   {post.contentMarkdown}
 </ReactMarkdown>
       </div>
