@@ -1,12 +1,12 @@
 export const dynamic = 'force-dynamic'
-
+export const metadata = {
+  title: '首页',
+}
 
 import Link from 'next/link'
 import { getPublishedPostsPaged } from '@/lib/posts'
 
-export const metadata = {
-  title: '首页',
-}
+
 
 export const revalidate = 3600
 
@@ -46,7 +46,7 @@ export default async function Home({ searchParams }: HomeProps) {
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-10">
       <h1 className="text-3xl font-bold">我的博客</h1>
-      <p className="mt-2 text-sm opacity-70">文章数据来自 TiDB，支持分页 + 分类 + 标签筛选。</p>
+      <p className="mt-2 text-sm opacity-70">文章支持分页 + 分类 + 标签筛选。</p>
 
       <form method="get" className="mt-6 grid grid-cols-1 gap-3 rounded border p-4 md:grid-cols-4">
         <input name="category" defaultValue={category} placeholder="category: tech" className="rounded border px-3 py-2" />

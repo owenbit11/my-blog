@@ -12,7 +12,7 @@ type PostPageProps = {
 // 新增：动态生成元数据函数
 export async function generateMetadata({ params }: PostPageProps) {
   const { slug } = await params
-  const post = await getPostBySlug(slug)
+  const post = await getPublishedPostBySlug(slug)
 
   if (!post) {
     return {
