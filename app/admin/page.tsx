@@ -1,131 +1,71 @@
 export const dynamic = 'force-dynamic'
 
+import Editor from '@/components/Editor'
 import { headers } from 'next/headers'
 import { getAdminLoginLimiter } from '@/lib/rate-limit'
 import { getRedis } from '@/lib/redis'
-import { logError, logInfo } from '@/lib/logger'
 import { verifyAdminPassword } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createPost, getAllPostsForAdmin, updatePostById, deletePostById } from '@/lib/posts'
 import { clearAdminSession, isAdminLoggedIn, setAdminSession } from '@/lib/auth'
 
-// 在文件顶部添加：
 export const metadata = {
   title: '内容管理后台',
 }
 
 function toSlug(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
+  return value.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-')
 }
 
 function normalizeTags(raw: string): string | null {
-  const value = raw
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .join(',')
-
+  const value = raw.split(',').map((s) => s.trim()).filter(Boolean).join(',')
   return value || null
 }
 
+// --- Actions ---
 async function loginAction(formData: FormData) {
   'use server'
-
   const password = String(formData.get('password') ?? '')
-
-  // 取客户端 IP（Vercel 场景常见）
   const h = await headers()
   const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-
-  // 限流检查
-  
-
   const limiter = getAdminLoginLimiter()
-try {
-  const result = await limiter.limit(ip)
-  if (!result.success) {
-    redirect('/admin?error=rate_limited')
-  }
-} catch {
-  // 降级：限流失败不阻断登录流程（避免本地 fetch failed）
-}
-const result = await limiter.limit(ip)
-
-  if (!result.success) {
-    redirect('/admin?error=rate_limited')
-  }
-
-  // 你原有的密码校验逻辑（明文或 bcrypt）保持不变
-  if (!(await verifyAdminPassword(password))) {
-    redirect('/admin?error=bad_password')
-  }
-
+  try {
+    const result = await limiter.limit(ip)
+    if (!result.success) redirect('/admin?error=rate_limited')
+  } catch {}
+  if (!(await verifyAdminPassword(password))) redirect('/admin?error=bad_password')
   await setAdminSession()
   redirect('/admin')
 }
 
-
-
 async function logoutAction() {
   'use server'
-
   await clearAdminSession()
   redirect('/admin')
 }
 
 async function createPostAction(formData: FormData) {
   'use server'
-
-  const loggedIn = await isAdminLoggedIn()
-  if (!loggedIn) {
-    redirect('/admin')
-  }
-
+  if (!(await isAdminLoggedIn())) redirect('/admin')
   const title = String(formData.get('title') ?? '').trim()
-  
   const excerpt = String(formData.get('excerpt') ?? '').trim()
   const contentMarkdown = String(formData.get('contentMarkdown') ?? '').trim()
   const status = String(formData.get('status') ?? 'draft') === 'published' ? 'published' : 'draft'
   const rawSlug = String(formData.get('slug') ?? '').trim()
   const slug = toSlug(rawSlug || title) || `post-${Date.now()}`
-
   const category = String(formData.get('category') ?? '').trim() || null
   const tags = normalizeTags(String(formData.get('tags') ?? ''))
 
-  if (!title || !contentMarkdown || !slug) {
-    redirect('/admin?error=invalid_form')
-  }
-
-  await createPost({
-    title,
-    excerpt,
-    contentMarkdown,
-    slug,
-    status,
-    category,
-    tags,
-  })
-
-  revalidatePath('/')
-  revalidatePath('/api/posts')
-  revalidatePath(`/posts/${slug}`)
+  if (!title || !contentMarkdown || !slug) redirect('/admin?error=invalid_form')
+  await createPost({ title, excerpt, contentMarkdown, slug, status, category, tags })
+  revalidatePath('/'); revalidatePath('/api/posts'); revalidatePath(`/posts/${slug}`)
   redirect('/admin?success=created')
 }
 
 async function updatePostAction(formData: FormData) {
   'use server'
-
-  const loggedIn = await isAdminLoggedIn()
-  if (!loggedIn) {
-    redirect('/admin')
-  }
-
+  if (!(await isAdminLoggedIn())) redirect('/admin')
   const id = Number(String(formData.get('id') ?? '0'))
   const title = String(formData.get('title') ?? '').trim()
   const excerpt = String(formData.get('excerpt') ?? '').trim()
@@ -133,263 +73,128 @@ async function updatePostAction(formData: FormData) {
   const status = String(formData.get('status') ?? 'draft') === 'published' ? 'published' : 'draft'
   const rawSlug = String(formData.get('slug') ?? '').trim()
   const slug = toSlug(rawSlug || title) || `post-${Date.now()}`
-
   const category = String(formData.get('category') ?? '').trim() || null
   const tags = normalizeTags(String(formData.get('tags') ?? ''))
 
-  if (!id || !title || !contentMarkdown || !slug) {
-    redirect('/admin?error=invalid_form')
-  }
-
-  await updatePostById({
-    id,
-    title,
-    slug,
-    excerpt,
-    contentMarkdown,
-    status,
-    category,
-    tags,
-  })
-
-  revalidatePath('/')
-  revalidatePath('/api/posts')
-  revalidatePath(`/posts/${slug}`)
+  if (!id || !title || !contentMarkdown || !slug) redirect('/admin?error=invalid_form')
+  await updatePostById({ id, title, slug, excerpt, contentMarkdown, status, category, tags })
+  
+  const redis = getRedis(); await redis.del('cache:posts:*')
+  revalidatePath('/'); revalidatePath('/api/posts'); revalidatePath(`/posts/${slug}`)
   redirect('/admin?success=updated')
 }
 
 async function deletePostAction(formData: FormData) {
   'use server'
-
-  const loggedIn = await isAdminLoggedIn()
-  if (!loggedIn) {
-    redirect('/admin')
-  }
-
+  if (!(await isAdminLoggedIn())) redirect('/admin')
   const id = Number(String(formData.get('id') ?? '0'))
-  if (!id) {
-    redirect('/admin?error=invalid_form')
-  }
-
   await deletePostById(id)
-
-  revalidatePath('/')
-  revalidatePath('/api/posts')
+  revalidatePath('/'); revalidatePath('/api/posts')
   redirect('/admin?success=deleted')
 }
 
-const redis = getRedis()
-await redis.del('cache:posts:*')
-
-
-type AdminPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>
-}
-
-export default async function AdminPage({ searchParams }: AdminPageProps) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<any> }) {
   const loggedIn = await isAdminLoggedIn()
   const params = await searchParams
   const posts = await getAllPostsForAdmin()
 
   if (!loggedIn) {
     return (
-      <main className="mx-auto w-full max-w-md px-6 py-10">
-        <h1 className="text-2xl font-bold">Admin 登录</h1>
-        <p className="mt-2 text-sm opacity-70">输入 ADMIN_PASSWORD 登录后台。</p>
-
-        {params.error === 'bad_password' ? (
-          <p className="mt-4 rounded-md border border-red-400 bg-red-50 p-3 text-sm text-red-700">
-            密码错误，请重试。
-          </p>
-        ) : null}
-        {params.error === 'rate_limited' ? (
-  <p className="mt-4 rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-700">
-    登录尝试过多，请稍后再试。
-  </p>
-) : null}
-
-
-        <form action={loginAction} className="mt-6 space-y-4 rounded-md border p-4">
-          <label className="block text-sm font-medium">密码</label>
-          <input
-            name="password"
-            type="password"
-            className="w-full rounded border px-3 py-2"
-            placeholder="请输入管理员密码"
-            required
-          />
-          <button type="submit" className="rounded bg-black px-4 py-2 text-white">
-            登录
-          </button>
+      <main className="mx-auto max-w-md py-20 px-6">
+        <h1 className="text-xl font-bold mb-4">Admin Login</h1>
+        <form action={loginAction} className="space-y-4 border p-4 rounded">
+          <input name="password" type="password" className="w-full border p-2" placeholder="Password" required />
+          <button className="w-full bg-black text-white p-2 rounded">Login</button>
         </form>
       </main>
     )
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-10">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">后台发布文章</h1>
-        <form action={logoutAction}>
-          <button type="submit" className="rounded border px-3 py-2 text-sm">
-            退出登录
-          </button>
-        </form>
+    <main className="mx-auto max-w-5xl py-10 px-6">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold">Blog Admin</h1>
+        <form action={logoutAction}><button className="text-sm border px-3 py-1 rounded">Logout</button></form>
       </div>
 
-      {params.success === 'created' ? (
-        <p className="mt-4 rounded-md border border-green-400 bg-green-50 p-3 text-sm text-green-700">
-          发布成功！
-        </p>
-      ) : null}
+      {/* 新建文章 */}
+      <section className="mb-12 border p-6 rounded-lg bg-white shadow-sm">
+        <h2 className="text-lg font-bold mb-4">Create New Post</h2>
+        <form action={createPostAction} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <input name="title" placeholder="Title" className="border p-2 rounded" required />
+            <input name="slug" placeholder="Slug (optional)" className="border p-2 rounded" />
+            <input name="category" placeholder="Category" className="border p-2 rounded" />
+            <input name="tags" placeholder="Tags (comma separated)" className="border p-2 rounded" />
+          </div>
+          <textarea name="excerpt" placeholder="Excerpt" className="w-full border p-2 rounded" rows={2} />
+          <Editor name="contentMarkdown" />
+          <div className="flex justify-between items-center">
+            <select name="status" className="border p-2 rounded">
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+            </select>
+            <button className="bg-black text-white px-6 py-2 rounded font-medium">Save Post</button>
+          </div>
+        </form>
+      </section>
 
-      {params.success === 'updated' ? (
-        <p className="mt-4 rounded-md border border-blue-400 bg-blue-50 p-3 text-sm text-blue-700">
-          修改成功！
-        </p>
-      ) : null}
+      {/* 文章管理 */}
+      <section className="space-y-8">
+        <h2 className="text-xl font-bold">Manage Posts</h2>
+        {posts.map((post) => (
+          <div key={post.id} className="border p-6 rounded-lg bg-gray-50">
+            <form action={updatePostAction} className="space-y-4">
+              <input type="hidden" name="id" value={post.id} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-500 font-bold uppercase">Title</label>
+                  <input name="title" defaultValue={post.title} className="w-full border p-2 rounded font-bold" required />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-bold uppercase">Slug</label>
+                  <input name="slug" defaultValue={post.slug} className="w-full border p-2 rounded" required />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-bold uppercase">Category</label>
+                  <input name="category" defaultValue={post.category ?? ''} className="w-full border p-2 rounded" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-bold uppercase">Tags</label>
+                  <input name="tags" defaultValue={post.tags?.join(',')} className="w-full border p-2 rounded" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-bold uppercase">Excerpt</label>
+                <textarea name="excerpt" defaultValue={post.excerpt} className="w-full border p-2 rounded" rows={2} />
+              </div>
 
-      {params.success === 'deleted' ? (
-        <p className="mt-4 rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-700">
-          删除成功！
-        </p>
-      ) : null}
+              <Editor name="contentMarkdown" defaultValue={post.contentMarkdown} />
 
-      {params.error === 'invalid_form' ? (
-        <p className="mt-4 rounded-md border border-red-400 bg-red-50 p-3 text-sm text-red-700">
-          表单不完整，请检查标题、slug 和内容。
-        </p>
-      ) : null}
+              <div className="flex justify-between items-center pt-4 border-t mt-4">
+                <div className="flex gap-4 items-center">
+                  <select name="status" defaultValue={post.status} className="border p-2 rounded text-sm">
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                  </select>
+                  <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium">Update</button>
+                </div>
+              </div>
+            </form>
 
-      <form action={createPostAction} className="mt-6 space-y-4 rounded-md border p-4">
-        <h2 className="text-lg font-semibold">新建文章</h2>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">标题</label>
-          <input name="title" className="w-full rounded border px-3 py-2" required />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Slug（可不填，自动由标题生成）</label>
-          <input name="slug" className="w-full rounded border px-3 py-2" placeholder="hello-tidb" />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">摘要</label>
-          <textarea name="excerpt" rows={2} className="w-full rounded border px-3 py-2" />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">分类（category）</label>
-          <input name="category" className="w-full rounded border px-3 py-2" placeholder="例如：tech" />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">标签（tags，英文逗号分隔）</label>
-          <input name="tags" className="w-full rounded border px-3 py-2" placeholder="例如：nextjs,tidb,markdown" />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Markdown 内容</label>
-          <textarea
-            name="contentMarkdown"
-            rows={8}
-            className="w-full rounded border px-3 py-2 font-mono text-sm"
-            placeholder={'# 标题\n\n- 列表项 1\n- 列表项 2'}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">状态</label>
-          <select name="status" className="rounded border px-3 py-2">
-            <option value="draft">草稿</option>
-            <option value="published">发布</option>
-          </select>
-        </div>
-
-        <button type="submit" className="rounded bg-black px-4 py-2 text-white">
-          保存文章
-        </button>
-      </form>
-
-      <section className="mt-10 space-y-4">
-        <h2 className="text-xl font-semibold">文章管理</h2>
-
-        {posts.length === 0 ? (
-          <p className="rounded border p-3 text-sm opacity-70">暂无文章</p>
-        ) : (
-          posts.map((post) => (
-            <div key={post.id} className="rounded-md border p-4">
-              <p className="mb-2 text-xs opacity-60">
-                ID: {post.id} | 状态: {post.status} | slug: {post.slug}
-              </p>
-
-              <form action={updatePostAction} className="space-y-3">
+            <div className="text-right mt-2">
+              <form action={deletePostAction}>
                 <input type="hidden" name="id" value={post.id} />
-
-                <input
-                  name="title"
-                  defaultValue={post.title}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-
-                <input
-                  name="slug"
-                  defaultValue={post.slug}
-                  className="w-full rounded border px-3 py-2"
-                  required
-                />
-
-                <input
-                  name="category"
-                  defaultValue={post.category ?? ''}
-                  className="w-full rounded border px-3 py-2"
-                  placeholder="例如：tech"
-                />
-
-                <input
-                  name="tags"
-                  defaultValue={post.tags.join(',')}
-                  className="w-full rounded border px-3 py-2"
-                  placeholder="例如：nextjs,tidb,markdown"
-                />
-
-                <textarea
-                  name="excerpt"
-                  defaultValue={post.excerpt}
-                  rows={2}
-                  className="w-full rounded border px-3 py-2"
-                />
-
-                <textarea
-                  name="contentMarkdown"
-                  defaultValue={post.contentMarkdown}
-                  rows={8}
-                  className="w-full rounded border px-3 py-2 font-mono text-sm"
-                  required
-                />
-
-                <select name="status" defaultValue={post.status} className="rounded border px-3 py-2">
-                  <option value="draft">草稿</option>
-                  <option value="published">发布</option>
-                </select>
-
-                <button type="submit" className="rounded bg-blue-600 px-3 py-2 text-white">
-                  保存修改
-                </button>
-              </form>
-
-              <form action={deletePostAction} className="mt-3">
-                <input type="hidden" name="id" value={post.id} />
-                <button type="submit" className="rounded bg-red-600 px-3 py-2 text-white">
-                  删除文章
+                <button 
+                  type="submit" 
+                  className="text-red-600 text-sm hover:underline"
+                >
+                  Delete Post
                 </button>
               </form>
             </div>
-          ))
-        )}
+          </div>
+        ))}
       </section>
     </main>
   )
