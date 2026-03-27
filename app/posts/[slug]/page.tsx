@@ -9,6 +9,23 @@ type PostPageProps = {
   params: Promise<{ slug: string }> // 修正：Next.js 16 规范，且对应文件夹名 [slug]
 }
 
+// 新增：动态生成元数据函数
+export async function generateMetadata({ params }: PostPageProps) {
+  const { slug } = await params
+  const post = await getPostBySlug(slug)
+
+  if (!post) {
+    return {
+      title: '文章未找到',
+    }
+  }
+
+  return {
+    title: post.title, // 自动填充到 layout.tsx 的 %s 中
+    description: post.excerpt || `${post.title} 的正文内容`,
+  }
+}
+
 export default async function PostPage({ params }: PostPageProps) {
   // 核心修复：必须 await params
   const { slug } = await params

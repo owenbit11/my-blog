@@ -4,6 +4,10 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { getPublishedPostsPaged } from '@/lib/posts'
 
+export const metadata = {
+  title: '首页',
+}
+
 export const revalidate = 3600
 
 type HomeProps = {

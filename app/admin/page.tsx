@@ -10,6 +10,11 @@ import { redirect } from 'next/navigation'
 import { createPost, getAllPostsForAdmin, updatePostById, deletePostById } from '@/lib/posts'
 import { clearAdminSession, isAdminLoggedIn, setAdminSession } from '@/lib/auth'
 
+// 在文件顶部添加：
+export const metadata = {
+  title: '内容管理后台',
+}
+
 function toSlug(value: string): string {
   return value
     .trim()
