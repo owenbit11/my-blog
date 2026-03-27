@@ -53,7 +53,7 @@ export default async function PostPage({ params }: PostPageProps) {
       </header>
 
       <div className="prose prose-lg max-w-none">
-      // 在 ReactMarkdown 组件中添加 components 属性
+      
       <ReactMarkdown
   rehypePlugins={[rehypeHighlight]}
   components={{
