@@ -71,13 +71,13 @@ export default async function PostPage({ params }: PostPageProps) {
           <aside className="lg:w-48 flex-shrink-0">
             <div className="lg:sticky lg:top-24 space-y-10">
               <div className="border-l-2 border-black pl-4">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 block mb-2">Published</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 block mb-2">发布日期</span>
                 <time className="text-sm font-bold text-gray-900">
                   {post.publishedAt && new Date(post.publishedAt).toLocaleDateString()}
                 </time>
               </div>
               <div className="pl-4">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 block mb-3">Reader View</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 block mb-3">字体大小</span>
                 <FontSizePicker />
               </div>
             </div>
