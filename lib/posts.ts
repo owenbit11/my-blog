@@ -16,7 +16,17 @@ const toDetail = (row: PostRow): PostDetail => ({
 async function ensurePostsSchema(): Promise<void> {
   const pool = getDbPool()
   await pool.execute(`CREATE TABLE IF NOT EXISTS posts (id BIGINT PRIMARY KEY AUTO_INCREMENT, slug VARCHAR(191) NOT NULL UNIQUE, title VARCHAR(255) NOT NULL, excerpt TEXT NOT NULL, content_markdown MEDIUMTEXT NOT NULL, status ENUM('draft', 'published') NOT NULL DEFAULT 'draft', published_at DATETIME NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`)
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS site_settings (
+      id INT PRIMARY KEY DEFAULT 1,
+      logo_url VARCHAR(255) DEFAULT '',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `)
+  // 插入初始数据（如果不存在）
+  await pool.execute(`INSERT IGNORE INTO site_settings (id, logo_url) VALUES (1, '')`)
 }
+
 
 // --- 修复后的核心导出函数 ---
 
@@ -76,4 +86,31 @@ export async function updatePostById(input: any) {
     `UPDATE posts SET title=?, slug=?, excerpt=?, content_markdown=?, status=?, category=?, tags=? WHERE id=?`,
     [input.title, input.slug, input.excerpt, input.contentMarkdown, input.status, input.category, input.tags, input.id]
   )
+}
+
+/**
+ * 获取所有已发布的文章（修复版：查询所有字段以适配 toDetail）
+ */
+export async function getAllPublishedPosts(): Promise<PostSummary[]> {
+  await ensurePostsSchema()
+  const pool = getDbPool()
+  
+  // 修改点：使用 SELECT *，确保 row 包含 created_at 和 updated_at
+  const [rows] = await pool.query<PostRow[]>(
+    `SELECT * FROM posts 
+     WHERE status = 'published' 
+     ORDER BY published_at DESC`
+  )
+  
+  // 现在 toDetail 不会因为找不到字段而报错了
+  return rows.map(toDetail)
+}
+
+export async function getSiteLogo(): Promise<string> {
+  const [rows] = await getDbPool().query<any[]>(`SELECT logo_url FROM site_settings WHERE id = 1`);
+  return rows[0]?.logo_url || '';
+}
+
+export async function updateSiteLogo(url: string) {
+  await getDbPool().execute(`UPDATE site_settings SET logo_url = ? WHERE id = 1`, [url]);
 }

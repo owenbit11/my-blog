@@ -7,7 +7,7 @@ import { getRedis } from '@/lib/redis'
 import { verifyAdminPassword } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createPost, getAllPostsForAdmin, updatePostById, deletePostById } from '@/lib/posts'
+import { createPost, getAllPostsForAdmin, updatePostById, deletePostById, getSiteLogo, updateSiteLogo} from '@/lib/posts'
 import { clearAdminSession, isAdminLoggedIn, setAdminSession } from '@/lib/auth'
 
 export const metadata = {
@@ -93,10 +93,22 @@ async function deletePostAction(formData: FormData) {
   redirect('/admin?success=deleted')
 }
 
+// 2. 新增更新 Logo 的 Action
+async function updateLogoAction(formData: FormData) {
+  'use server'
+  if (!(await isAdminLoggedIn())) redirect('/admin')
+  const logoUrl = String(formData.get('logoUrl') ?? '').trim()
+  await updateSiteLogo(logoUrl)
+  revalidatePath('/')
+  revalidatePath('/posts/[slug]', 'layout') // 刷新所有文章页
+  redirect('/admin?success=logo_updated')
+}
+
 export default async function AdminPage({ searchParams }: { searchParams: Promise<any> }) {
   const loggedIn = await isAdminLoggedIn()
   const params = await searchParams
   const posts = await getAllPostsForAdmin()
+  const currentLogo = await getSiteLogo() // 获取当前 Logo
 
   if (!loggedIn) {
     return (
@@ -116,6 +128,37 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <h1 className="text-2xl font-bold">Blog Admin</h1>
         <form action={logoutAction}><button className="text-sm border px-3 py-1 rounded">Logout</button></form>
       </div>
+
+      {/* --- 新增：Logo 管理区域 --- */}
+      <section className="mb-12 border p-6 rounded-lg bg-gray-50 shadow-sm border-dashed border-blue-200">
+        <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+          🖼️ Site Logo Settings
+        </h2>
+        <form action={updateLogoAction} className="space-y-4">
+          <div className="flex items-end gap-6">
+            <div className="flex-1">
+              <label className="text-xs text-gray-500 font-bold uppercase">Logo Image URL</label>
+              <input 
+                name="logoUrl" 
+                defaultValue={currentLogo} 
+                placeholder="https://cloudinary.com/..." 
+                className="w-full border p-2 rounded mt-1"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">
+                提示：请先在下方创建文章的图片上传处获取图片链接，粘贴至此处。
+              </p>
+            </div>
+            {currentLogo && (
+              <div className="w-12 h-12 border rounded bg-white flex items-center justify-center overflow-hidden p-1">
+                <img src={currentLogo} alt="Logo Preview" className="max-h-full max-w-full object-contain" />
+              </div>
+            )}
+            <button className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium">
+              Update Logo
+            </button>
+          </div>
+        </form>
+      </section>
 
       {/* 新建文章 */}
       <section className="mb-12 border p-6 rounded-lg bg-white shadow-sm">
