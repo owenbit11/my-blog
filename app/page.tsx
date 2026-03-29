@@ -45,7 +45,7 @@ export default async function Home({ searchParams }: HomeProps) {
         ) : (
           items.map((post) => (
             // --- 修改点 1: 文章外框改为黑色边框卡片样式 ---
-            <article key={post.id} className="group border p-6 rounded-lg bg-white shadow-sm transition-all hover:shadow-md">
+            <article key={post.id} className="group border p-6 rounded-lg bg-gray-50 shadow-sm transition-all hover:shadow-md">
               <h2 className="text-2xl font-bold">
                 <Link href={`/posts/${post.slug}`} className="group-hover:text-blue-600 transition-colors">
                   {post.title}
@@ -53,7 +53,7 @@ export default async function Home({ searchParams }: HomeProps) {
               </h2>
               
               {/* --- 修改点 2: Excerpt 改为灰色内嵌框样式 --- */}
-              <div className="mt-4 border border-gray-100 p-4 rounded bg-gray-50 text-gray-600 leading-relaxed text-sm line-clamp-3">
+              <div className="mt-4 border border-gray-200 p-4 rounded bg-white text-gray-600 leading-relaxed text-sm line-clamp-3">
                 {post.excerpt || "暂无摘要..."}
               </div>
 
