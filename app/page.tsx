@@ -54,7 +54,9 @@ export default async function Home({ searchParams }: HomeProps) {
               
               {/* --- 修改点 2: Excerpt 改为灰色内嵌框样式 --- */}
               <div className="mt-4 border border-gray-200 p-4 rounded bg-white text-gray-600 leading-relaxed text-sm line-clamp-3">
-                {post.excerpt || "暂无摘要..."}
+              {post.excerpt && post.excerpt.length > 89 
+                  ? `${post.excerpt.slice(0, 89)}...` 
+                  : (post.excerpt || "暂无摘要...")}
               </div>
 
               {/* 底部元数据 */}
