@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import Pagination from '@/components/Pagination'
 import Editor from '@/components/Editor'
 import { headers } from 'next/headers'
 import { getAdminLoginLimiter } from '@/lib/rate-limit'
@@ -7,13 +8,15 @@ import { getRedis } from '@/lib/redis'
 import { verifyAdminPassword } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createPost, getAllPostsForAdmin, updatePostById, deletePostById, getSiteLogo, updateSiteLogo} from '@/lib/posts'
+// 注意这里导出名确保与 lib 对应
+import { createPost, getAllPostsForAdminPaged, updatePostById, deletePostById, getSiteLogo, updateSiteLogo } from '@/lib/posts'
 import { clearAdminSession, isAdminLoggedIn, setAdminSession } from '@/lib/auth'
 
 export const metadata = {
   title: '内容管理后台',
 }
 
+// --- 辅助函数 (保持不变) ---
 function toSlug(value: string): string {
   return value.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-').replace(/-+/g, '-')
 }
@@ -23,7 +26,7 @@ function normalizeTags(raw: string): string | null {
   return value || null
 }
 
-// --- Actions ---
+// --- Actions (全部保持不变) ---
 async function loginAction(formData: FormData) {
   'use server'
   const password = String(formData.get('password') ?? '')
@@ -93,22 +96,28 @@ async function deletePostAction(formData: FormData) {
   redirect('/admin?success=deleted')
 }
 
-// 2. 新增更新 Logo 的 Action
 async function updateLogoAction(formData: FormData) {
   'use server'
   if (!(await isAdminLoggedIn())) redirect('/admin')
   const logoUrl = String(formData.get('logoUrl') ?? '').trim()
   await updateSiteLogo(logoUrl)
   revalidatePath('/')
-  revalidatePath('/posts/[slug]', 'layout') // 刷新所有文章页
+  revalidatePath('/posts/[slug]', 'layout')
   redirect('/admin?success=logo_updated')
 }
 
+// --- 核心页面组件 ---
 export default async function AdminPage({ searchParams }: { searchParams: Promise<any> }) {
   const loggedIn = await isAdminLoggedIn()
   const params = await searchParams
-  const posts = await getAllPostsForAdmin()
-  const currentLogo = await getSiteLogo() // 获取当前 Logo
+  
+  // 【修改点 1】设置分页参数
+  const currentPage = Number(params.page || 1)
+  const pageSize = 6
+
+  // 【修改点 2】调用分页函数并解构 items 和 total
+  const { items: posts, total } = await getAllPostsForAdminPaged(currentPage, pageSize)
+  const currentLogo = await getSiteLogo()
 
   if (!loggedIn) {
     return (
@@ -129,7 +138,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <form action={logoutAction}><button className="text-sm border px-3 py-1 rounded">Logout</button></form>
       </div>
 
-      {/* --- 新增：Logo 管理区域 --- */}
+      {/* Logo 管理 (保持不变) */}
       <section className="mb-12 border p-6 rounded-lg bg-gray-50 shadow-sm border-dashed border-blue-200">
         <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
           🖼️ Site Logo Settings
@@ -160,7 +169,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </form>
       </section>
 
-      {/* 新建文章 */}
+      {/* 新建文章 (保持不变) */}
       <section className="mb-12 border p-6 rounded-lg bg-white shadow-sm">
         <h2 className="text-lg font-bold mb-4">Create New Post</h2>
         <form action={createPostAction} className="space-y-4">
@@ -182,9 +191,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </form>
       </section>
 
-      {/* 文章管理 */}
+      {/* 文章管理 (渲染 posts 数组) */}
       <section className="space-y-8">
-        <h2 className="text-xl font-bold">Manage Posts</h2>
+        <h2 className="text-xl font-bold">Manage Posts ({total})</h2>
         {posts.map((post) => (
           <div key={post.id} className="border p-6 rounded-lg bg-gray-50">
             <form action={updatePostAction} className="space-y-4">
@@ -228,10 +237,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <div className="text-right mt-2">
               <form action={deletePostAction}>
                 <input type="hidden" name="id" value={post.id} />
-                <button 
-                  type="submit" 
-                  className="text-red-600 text-sm hover:underline"
-                >
+                <button type="submit" className="text-red-600 text-sm hover:underline">
                   Delete Post
                 </button>
               </form>
@@ -239,6 +245,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </div>
         ))}
       </section>
+
+      {/* 【修改点 3】在底部添加分页组件 */}
+      <Pagination total={total} pageSize={pageSize} currentPage={currentPage} />
     </main>
   )
 }
