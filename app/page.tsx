@@ -39,21 +39,39 @@ export default async function Home({ searchParams }: HomeProps) {
       </form>
 
       {/* 文章列表 */}
-      <div className="mt-10 space-y-6">
+      <div className="mt-10 space-y-8"> {/* 增加卡片间的间距 */}
         {items.length === 0 ? (
           <p className="py-20 text-center text-gray-400 border rounded-xl border-dashed">暂无相关文章。</p>
         ) : (
           items.map((post) => (
-            <article key={post.id} className="group border-b pb-8">
+            // --- 修改点 1: 文章外框改为黑色边框卡片样式 ---
+            <article key={post.id} className="group border p-6 rounded-lg bg-white shadow-sm transition-all hover:shadow-md">
               <h2 className="text-2xl font-bold">
                 <Link href={`/posts/${post.slug}`} className="group-hover:text-blue-600 transition-colors">
                   {post.title}
                 </Link>
               </h2>
-              <p className="mt-3 text-gray-600 leading-relaxed line-clamp-2">{post.excerpt}</p>
-              <div className="mt-4 flex items-center gap-4 text-xs font-medium text-gray-400">
-                <span className="bg-gray-100 px-2 py-1 rounded text-gray-500">{post.category || '未分类'}</span>
-                <span>{post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('zh-CN') : '未发布'}</span>
+              
+              {/* --- 修改点 2: Excerpt 改为灰色内嵌框样式 --- */}
+              <div className="mt-4 border border-gray-100 p-4 rounded bg-gray-50 text-gray-600 leading-relaxed text-sm line-clamp-3">
+                {post.excerpt || "暂无摘要..."}
+              </div>
+
+              {/* 底部元数据 */}
+              <div className="mt-6 flex items-center justify-between text-xs font-medium text-gray-400 border-t pt-4">
+                <div className="flex items-center gap-3">
+                  <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold uppercase tracking-wider">
+                    {post.category || '未分类'}
+                  </span>
+                  {post.tags && post.tags.length > 0 && (
+                    <span className="hidden sm:inline">
+                      标签: {post.tags.join(', ')}
+                    </span>
+                  )}
+                </div>
+                <time className="font-mono">
+                  {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('zh-CN') : '未发布'}
+                </time>
               </div>
             </article>
           ))
