@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import DateFilter from '@/components/admin/DateFilter'
 import Pagination from '@/components/Pagination'
 import Editor from '@/components/Editor'
 import { headers } from 'next/headers'
@@ -111,12 +112,21 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const loggedIn = await isAdminLoggedIn()
   const params = await searchParams
   
-  // 【修改点 1】设置分页参数
+  // 【修改点 1】设置分页参数及日期参数
   const currentPage = Number(params.page || 1)
   const pageSize = 6
+  // 新增：提取日期筛选参数
+  const startDate = params.startDate as string | undefined
+  const endDate = params.endDate as string | undefined
 
-  // 【修改点 2】调用分页函数并解构 items 和 total
-  const { items: posts, total } = await getAllPostsForAdminPaged(currentPage, pageSize)
+  // 【修改点 2】调用分页函数并传入日期参数
+  // 确保你的 lib/posts.ts 中的 getAllPostsForAdminPaged 已按上一步修改以支持 4 个参数
+  const { items: posts, total } = await getAllPostsForAdminPaged(
+    currentPage, 
+    pageSize, 
+    startDate, 
+    endDate
+  )
   const currentLogo = await getSiteLogo()
 
   if (!loggedIn) {
@@ -193,61 +203,81 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       {/* 文章管理 (渲染 posts 数组) */}
       <section className="space-y-8">
-        <h2 className="text-xl font-bold">Manage Posts ({total})</h2>
-        {posts.map((post) => (
-          <div key={post.id} className="border p-6 rounded-lg bg-gray-50">
-            <form action={updatePostAction} className="space-y-4">
-              <input type="hidden" name="id" value={post.id} />
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-gray-500 font-bold uppercase">Title</label>
-                  <input name="title" defaultValue={post.title} className="w-full border p-2 rounded font-bold" required />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 font-bold uppercase">Slug</label>
-                  <input name="slug" defaultValue={post.slug} className="w-full border p-2 rounded" required />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 font-bold uppercase">Category</label>
-                  <input name="category" defaultValue={post.category ?? ''} className="w-full border p-2 rounded" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 font-bold uppercase">Tags</label>
-                  <input name="tags" defaultValue={post.tags?.join(',')} className="w-full border p-2 rounded" />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 font-bold uppercase">Excerpt</label>
-                <textarea name="excerpt" defaultValue={post.excerpt} className="w-full border p-2 rounded" rows={2} />
-              </div>
+        {/* 修改 1: 调整布局，移除 justify-between，改用 items-center 和 gap-4 让筛选器紧贴标题 */}
+        <div className="flex items-center gap-4 border-b pb-4">
+          <h2 className="text-xl font-bold whitespace-nowrap">Manage Posts ({total})</h2>
+          
+          {/* 【新增筛选功能】现在它会紧跟在标题后面 */}
+          <DateFilter />
+        </div>
 
-              <Editor name="contentMarkdown" defaultValue={post.contentMarkdown} />
-
-              <div className="flex justify-between items-center pt-4 border-t mt-4">
-                <div className="flex gap-4 items-center">
-                  <select name="status" defaultValue={post.status} className="border p-2 rounded text-sm">
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                  </select>
-                  <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium">Update</button>
-                </div>
-              </div>
-            </form>
-
-            <div className="text-right mt-2">
-              <form action={deletePostAction}>
-                <input type="hidden" name="id" value={post.id} />
-                <button type="submit" className="text-red-600 text-sm hover:underline">
-                  Delete Post
-                </button>
-              </form>
-            </div>
+        {/* 修改 2: 增加逻辑判断，如果筛选结果为空则显示提示，否则渲染列表 */}
+        {posts.length === 0 ? (
+          <div className="text-center py-20 border rounded-lg bg-gray-50 text-gray-400">
+            在该日期范围内没有找到任何文章。
           </div>
-        ))}
+        ) : (
+          posts.map((post) => (
+            <div key={post.id} className="border p-6 rounded-lg bg-gray-50">
+              <form action={updatePostAction} className="space-y-4">
+                <input type="hidden" name="id" value={post.id} />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-gray-500 font-bold uppercase">Title</label>
+                    <input name="title" defaultValue={post.title} className="w-full border p-2 rounded font-bold" required />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 font-bold uppercase">Slug</label>
+                    <input name="slug" defaultValue={post.slug} className="w-full border p-2 rounded" required />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 font-bold uppercase">Category</label>
+                    <input name="category" defaultValue={post.category ?? ''} className="w-full border p-2 rounded" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 font-bold uppercase">Tags</label>
+                    <input name="tags" defaultValue={post.tags?.join(',')} className="w-full border p-2 rounded" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-bold uppercase">Excerpt</label>
+                  <textarea name="excerpt" defaultValue={post.excerpt} className="w-full border p-2 rounded" rows={2} />
+                </div>
+
+                <Editor name="contentMarkdown" defaultValue={post.contentMarkdown} />
+
+                <div className="flex justify-between items-center pt-4 border-t mt-4">
+                  <div className="flex gap-4 items-center">
+                    <select name="status" defaultValue={post.status} className="border p-2 rounded text-sm">
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                    </select>
+                    <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium">Update</button>
+                  </div>
+                  {/* 可选：显示该文章的发布时间 */}
+                  <span className="text-xs text-gray-400">
+                     {post.publishedAt ? `Published: ${new Date(post.publishedAt).toLocaleDateString()}` : 'Not Published'}
+                  </span>
+                </div>
+              </form>
+
+              <div className="text-right mt-2">
+                <form action={deletePostAction}>
+                  <input type="hidden" name="id" value={post.id} />
+                  <button type="submit" className="text-red-600 text-sm hover:underline">
+                    Delete Post
+                  </button>
+                </form>
+              </div>
+            </div>
+          ))
+        )}
       </section>
 
       {/* 【修改点 3】在底部添加分页组件 */}
       <Pagination total={total} pageSize={pageSize} currentPage={currentPage} />
-    </main>
-  )
+      </main>
+
+)
+
 }

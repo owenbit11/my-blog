@@ -55,16 +55,20 @@ async function getPagedPostsInternal(input: {
   pageSize: number; 
   category?: string; 
   tag?: string; 
+  startDate?: string; 
+  endDate?: string; 
   isAdmin: boolean 
 }) {
   await ensurePostsSchema()
   const pool = getDbPool()
-  const { page, pageSize, category, tag, isAdmin } = input
+  const { page, pageSize, category, tag, startDate, endDate, isAdmin } = input
   const offset = (page - 1) * pageSize
 
+  // 1. 基础条件
   let whereConditions = isAdmin ? [] : ["status = 'published'"]
   let sqlParams: any[] = []
 
+  // 2. 动态添加条件 (必须严格保持 push 条件和 push 参数的顺序一致)
   if (category) {
     whereConditions.push("category = ?")
     sqlParams.push(category)
@@ -73,24 +77,31 @@ async function getPagedPostsInternal(input: {
     whereConditions.push("tags LIKE ?")
     sqlParams.push(`%${tag}%`)
   }
+  if (startDate) {
+    whereConditions.push("published_at >= ?")
+    sqlParams.push(`${startDate} 00:00:00`)
+  }
+  if (endDate) {
+    whereConditions.push("published_at <= ?")
+    sqlParams.push(`${endDate} 23:59:59`)
+  }
 
   const whereClause = whereConditions.length > 0 ? "WHERE " + whereConditions.join(" AND ") : ""
 
-  // 1. 获取总数
+  // 3. 获取总数 (确保 sqlParams 被正确传入)
   const [countRows] = await pool.query<any[]>(`SELECT COUNT(*) as total FROM posts ${whereClause}`, sqlParams)
   const total = countRows[0]?.total || 0
 
-  // 前台：只看发布时间（因为只有已发布的）
-// 后台：优先看发布时间，如果没发布（草稿），则按创建时间排序，确保新写的草稿排在最前
-const orderBy = isAdmin 
-? "COALESCE(published_at, created_at) DESC, id DESC" 
-: "published_at DESC, created_at DESC";
+  const orderBy = isAdmin 
+    ? "COALESCE(published_at, created_at) DESC, id DESC" 
+    : "published_at DESC, created_at DESC"
 
-// 3. 执行查询
-const [rows] = await pool.query<PostRow[]>(
-`SELECT * FROM posts ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
-[...sqlParams, pageSize, offset]
-);
+  // 4. 执行分页查询
+  // 注意：LIMIT 和 OFFSET 的参数必须放在 sqlParams 的最后
+  const [rows] = await pool.query<PostRow[]>(
+    `SELECT * FROM posts ${whereClause} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+    [...sqlParams, pageSize, offset]
+  )
 
   return { items: rows.map(toDetail), total: Number(total) }
 }
@@ -103,8 +114,8 @@ export async function getPublishedPostsPaged(input: { page: number; pageSize: nu
 }
 
 // 适配后台管理传参: (page, pageSize)
-export async function getAllPostsForAdminPaged(page: number, pageSize: number) {
-  return getPagedPostsInternal({ page, pageSize, isAdmin: true })
+export async function getAllPostsForAdminPaged(page: number, pageSize: number, startDate?: string,  endDate?: string ) {
+  return getPagedPostsInternal({ page, pageSize, startDate, endDate, isAdmin: true })
 }
 
 export async function getPostById(id: string | number): Promise<PostDetail | null> {
